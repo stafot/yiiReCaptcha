@@ -6,6 +6,7 @@
  * @license http://opensource.org/licenses/MIT MIT
  */
 
+
 /**
  * ReCaptchaValidator class file
  * Description of Recaptcha
@@ -15,14 +16,8 @@
  * @copyright 2015 Ceres Solutions LLC
  */
 
-require __DIR__ . '/vendor/autoload.php';
-use GuzzleHttp\Client;
-use GuzzleHttp\Message;
-
-
 class ReCaptchaValidator extends CValidator
 {
-
     const SITE_VERIFY_URL        = 'https://www.google.com/recaptcha/api/siteverify';
     const CAPTCHA_RESPONSE_FIELD = 'g-recaptcha-response';
 
@@ -47,7 +42,7 @@ class ReCaptchaValidator extends CValidator
             }
         }
         if ($this->message === null || empty($this->message)) {
-            $this->message = Yii::t('yii', 'The verification code is incorrect.');
+            $this->message = Yii::t('yii', ' Please click on the checkbox to continue.');
         }
     }
 
@@ -70,25 +65,27 @@ class ReCaptchaValidator extends CValidator
             }
         }
 
-        $client = new Client(self::SITE_VERIFY_URL);
-        $request = $client->get();
-        $q = $request->getQuery();
-        $q->set('secret', $this->secret);
-        $q->set('response', $value);
-        $q->set('remoteip', Yii::app()->request->getUserHostAddress());
+        $client = new GuzzleHttp\Client();
+        $response = $client->post(
+            self::SITE_VERIFY_URL,
+            ['body'=> [
+                'secret'   => $this->secret,
+                'response' => $value,
+                'remoteip' => Yii::app()->request->getUserHostAddress(),
+            ]]);
+        $body = json_decode((string)$response->getBody());
 
-        $response = $this->getResponse($request);
-        if (!isset($response['success'])) {
+        if (!isset($body->success)) {
             throw new CException('Invalid recaptcha verify response.');
         }
-        if (!$response['success']) {
+        if (!$body->success) {
             $message = $this->message;
             $this->addError($object, $attribute, $message);
         }
     }
 
     /**
-     * 
+     *
      * Validate recaptcha
      * @param CModel $object the data object being validated
      * @param string $attribute the name of the attribute to be validated.
@@ -96,21 +93,7 @@ class ReCaptchaValidator extends CValidator
      */
     public function clientValidateAttribute($object, $attribute)
     {
-        $message = Yii::t(
-                'yii', '{attribute} cannot be blank.', array('attribute' => $object->getAttributeLabel($attribute))
-        );
+        $message = $this->message !== null ? $this->message : Yii::t('yii', 'Please click on the checkbox to continue.');
         return "(function(messages){if(!grecaptcha.getResponse()){messages.push('{$message}');}})(messages);";
     }
-
-    /**
-     * @param string $request
-     * @return mixed
-     */
-    protected function getResponse($request)
-    {
-        $response = $request->send();
-
-        return $response->json();
-    }
-
 }
